@@ -1,0 +1,124 @@
+（spoc)了解race condition. 进入race-condition代码目录。
+
+执行 ./x86.py -p loop.s -t 1 -i 100 -R dx， 请问dx的值是什么？
+ Thread 0
+ 
+ 执行 ./x86.py -p loop.s -t 2 -i 100 -a dx=3,dx=3 -R dx ， 请问dx的值是什么？
+ dx Thread0 Thread1
+ 
+执行 ./x86.py -p loop.s -t 2 -i 3 -r -a dx=3,dx=3 -R dx， 请问dx的值是什么？
+dx Thread0 Thread1
+
+变量x的内存地址为2000, ./x86.py -p looping-race-nolock.s -t 1 -M 2000, 请问变量x的值是什么？
+2000 Thread0
+
+变量x的内存地址为2000, ./x86.py -p looping-race-nolock.s -t 2 -a bx=3 -M 2000, 请问变量x的值是什么？为何每个线程要循环3次？
+2000 Thread0 Thread1
+每个线程要循环3次是因为bx=3会赋值给每个线程。
+
+变量x的内存地址为2000, ./x86.py -p looping-race-nolock.s -t 2 -M 2000 -i 4 -r -s 0， 请问变量x的值是什么？
+2000 Thread0 Thread1
+
+变量x的内存地址为2000, ./x86.py -p looping-race-nolock.s -t 2 -M 2000 -i 4 -r -s 1， 请问变量x的值是什么？
+2000          Thread 0                Thread 1         
+    0   
+    0   1000 mov 2000, %ax
+    0   1001 add $1, %ax
+    0   ------ Interrupt ------  ------ Interrupt ------  
+    0                            1000 mov 2000, %ax
+    0   ------ Interrupt ------  ------ Interrupt ------  
+    1   1002 mov %ax, 2000
+    1   1003 sub  $1, %bx
+    1   1004 test $0, %bx
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1                            1001 add $1, %ax
+    1                            1002 mov %ax, 2000
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1   1005 jgt .top
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1                            1003 sub  $1, %bx
+    1                            1004 test $0, %bx
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1   1006 halt
+    1   ----- Halt;Switch -----  ----- Halt;Switch -----  
+    1                            1005 jgt .top
+    1                            1006 halt
+
+变量x的内存地址为2000, ./x86.py -p looping-race-nolock.s -t 2 -M 2000 -i 4 -r -s 2， 请问变量x的值是什么？
+2000          Thread 0                Thread 1         
+    0   
+    0   1000 mov 2000, %ax
+    0   1001 add $1, %ax
+    0   ------ Interrupt ------  ------ Interrupt ------  
+    0                            1000 mov 2000, %ax
+    0                            1001 add $1, %ax
+    1                            1002 mov %ax, 2000
+    1                            1003 sub  $1, %bx
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1   1002 mov %ax, 2000
+    1   1003 sub  $1, %bx
+    1   1004 test $0, %bx
+    1   1005 jgt .top
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1                            1004 test $0, %bx
+    1                            1005 jgt .top
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1   1006 halt
+    1   ----- Halt;Switch -----  ----- Halt;Switch -----  
+    1                            1006 halt
+变量x的内存地址为2000, ./x86.py -p looping-race-nolock.s -a bx=1 -t 2 -M 2000 -i 1， 请问变量x的值是什么？
+2000          Thread 0                Thread 1         
+    0   
+    0   1000 mov 2000, %ax
+    0   ------ Interrupt ------  ------ Interrupt ------  
+    0                            1000 mov 2000, %ax
+    0   ------ Interrupt ------  ------ Interrupt ------  
+    0   1001 add $1, %ax
+    0   ------ Interrupt ------  ------ Interrupt ------  
+    0                            1001 add $1, %ax
+    0   ------ Interrupt ------  ------ Interrupt ------  
+    1   1002 mov %ax, 2000
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1                            1002 mov %ax, 2000
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1   1003 sub  $1, %bx
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1                            1003 sub  $1, %bx
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1   1004 test $0, %bx
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1                            1004 test $0, %bx
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1   1005 jgt .top
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1                            1005 jgt .top
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1   1006 halt
+    1   ----- Halt;Switch -----  ----- Halt;Switch -----  
+    1   ------ Interrupt ------  ------ Interrupt ------  
+    1                            1006 halt
+    
+    
+    
+2.了解software-based lock, hardware-based lock, software-hardware-lock代码目录
+
+理解flag.s,peterson.s,test-and-set.s,ticket.s,test-and-test-and-set.s 请通过x86.py分析这些代码是否实现了锁机制？请给出你的实验过程和结论说明。能否设计新的硬件原子操作指令Compare-And-Swap,Fetch-And-Add？
+Compare-And-Swap
+
+int CompareAndSwap(int *ptr, int expected, int new) {
+  int actual = *ptr;
+  if (actual == expected)
+    *ptr = new;
+  return actual;
+}
+Fetch-And-Add
+
+int FetchAndAdd(int *ptr) {
+  int old = *ptr;
+  *ptr = old + 1;
+  return old;
+}
+
+flag.s没有实现好，根据“./x86.py -p flag.s -t 2 -i 1 -c -M count”的结果，count最后为1，说明没有锁好。
+peterson.s没有实现好，根据“./x86.py -p peterson.s -t 2 -i 1 -c -M count”的结果，count最后为1，说明没有锁好。
+test-and-set.s应该是锁好了的,ticket.s应该是锁好了的,test-and-test-and-set.s应该是锁好了的。
